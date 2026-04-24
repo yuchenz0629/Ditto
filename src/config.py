@@ -1,6 +1,8 @@
 from pathlib import Path
 
 MODEL = "claude-sonnet-4-6"
+MAX_TOKENS = 1024
+TEMPERATURE = 0.05
 
 BACKGROUNDS_DIR = Path("assets/backgrounds")
 BACKGROUNDS_INDEX = Path("assets/backgrounds/index.json")

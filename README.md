@@ -102,7 +102,7 @@ Each poster generation takes 6–15 seconds end-to-end. This includes everything
 I enforced in test suite a 30-second hard timeout per subprocess call. On timeout, it retries once before failing to handle transient API latency spikes without masking real failures, separating it with errors that fail immediately. Each test case gives structured live logs per user using pytest's `log_cli`. This way the tester sees timing,  selection details, and the LLM-interpreted action for every edit more clearly.
 
 ### Consistency
-The analyzer runs at `temperature=0`, which minimises but does not eliminate LLM variance. The same set of images may yield different number of images or potentially background, and in this case, I believe it is acceptable, because this project is not a deterministic algorithm. The parse-failure retry fires only when Claude returns malformed JSON, not for selection variance. During testing, this path has never been observed, but it is a good-to-have precaution mechanism.
+The analyzer runs at `temperature=0.05`, which minimises but does not eliminate LLM variance. The same set of images may yield different number of images or potentially background, and in this case, I believe it is acceptable, because this project is not a deterministic algorithm. The parse-failure retry fires only when Claude returns malformed JSON, not for selection variance. During testing, this path has never been observed, but it is a good-to-have precaution mechanism.
 
 
 

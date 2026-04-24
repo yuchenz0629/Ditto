@@ -16,7 +16,7 @@ from models import (
 )
 import anthropic
 from anthropic.types import Message, TextBlock
-from config import MODEL, BACKGROUND_GUIDE_PATH
+from config import MODEL, BACKGROUND_GUIDE_PATH, MAX_TOKENS, TEMPERATURE
 
 _MAX_SIDE = 800
 log = logging.getLogger(__name__)
@@ -174,8 +174,8 @@ def _response_text(resp: Message) -> str:
 def _call(client: anthropic.Anthropic, content: list) -> str:
     resp = client.messages.create(
         model=MODEL,
-        max_tokens=1024,
-        temperature=0,
+        max_tokens=MAX_TOKENS,
+        temperature=TEMPERATURE,
         system=SYSTEM,
         messages=[{"role": "user", "content": content}],
     )
