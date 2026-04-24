@@ -92,7 +92,7 @@ pytest tests/test_edit.py
 
 ## Result Analysis
 
-1. Poster generation typically costs around 120 - 130 seconds, meaning slightly over 10 seconds per set of users, which meets the targeted duration. Overall, the posters generated looks good, the crops are reasonable and arrangement, after many attempts, turns out neat. The only imperfection is that for user_07, the fifth image of her wearing a ski helmet with goggles still has a big chance of being misidentified. But other than that, the results are able to match my expectation.
+1. Each oster generation typically costs around 6 - 15 seconds, which on average, meets the targeted duration. Overall, the posters generated looks good, the crops are reasonable and arrangement, after many attempts, turns out neat. The only imperfection is that for user_07, the fifth image of her wearing a ski helmet with goggles still has a big chance of being misidentified. But other than that, the results are able to match my expectation.
 2. I designed 25 editing tasks across all 10 users and the test is complete within 90 seconds, a pretty decent speed. 
 
 

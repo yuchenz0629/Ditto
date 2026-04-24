@@ -110,8 +110,14 @@ Rules:
 
 ## Step 4 — Background selection
 Filter by gender compatibility first (see gender field in each background). \
-Then match by scene/vibe. Use color_tone as tiebreaker. \
-Default to "Sunset Glow" when uncertain.
+Then use the detailed guide below to match by photo content, scene, and vibe — \
+paying close attention to the "When to Use" conditions for each background. \
+Use color_tone as a tiebreaker when conditions are inconclusive. \
+If no background is a clear match, pick the one \
+whose color_tone best complements the dominant_tone of the selected photos. \
+or fall back to the safest option discussed in the background_guide.
+
+{background_guide}
 
 Return exactly this JSON (no other text):
 {{
@@ -183,6 +189,9 @@ def _call(client: anthropic.Anthropic, content: list) -> str:
     return extracted
 
 
+_BACKGROUND_GUIDE_PATH = Path("assets/backgrounds/Background_Guide.md")
+
+
 def _build_content(parsed: ParsedInput) -> list:
     content: list = []
     for i, path in enumerate(parsed.image_paths):
@@ -196,6 +205,7 @@ def _build_content(parsed: ParsedInput) -> list:
             backgrounds_json=json.dumps(
                 [b.model_dump() for b in parsed.backgrounds], indent=2
             ),
+            background_guide=_BACKGROUND_GUIDE_PATH.read_text(),
         ),
     })
     return content
@@ -215,9 +225,9 @@ def _normalize_background(bg_value: str, parsed: ParsedInput) -> str:
     candidate = bg_value.replace("_", " ").removesuffix(".jpg").removesuffix(".png")
     if candidate in valid_names:
         return candidate
-    # Fallback
-    log.warning("Unknown background %r — defaulting to 'Sunset Glow'", bg_value)
-    return "Sunset Glow"
+    fallback = "Forest Green" if parsed.gender == "female" else "Serene Blue"
+    log.warning("Unknown background %r — defaulting to '%s'", bg_value, fallback)
+    return fallback
 
 
 # The selected/rejected lists are index-based, so include that in the poster state
