@@ -127,7 +127,9 @@ def _interpret(state: PosterState, instruction: str, backgrounds_json: str) -> E
     if not extracted:
         log.warning("Editor LLM returned empty response: %r", raw[:200])
 
-    return _adapter.validate_json(extracted)
+    command = _adapter.validate_json(extracted)
+    log.info("Action: %s — %s", command.action, command.reason)
+    return command
 
 
 def _layout_for_count(count: int) -> LayoutName:

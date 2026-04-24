@@ -1,7 +1,11 @@
 import subprocess
 import sys
+import time
+import logging
 from pathlib import Path
 import pytest
+
+log = logging.getLogger(__name__)
 
 EDIT_SEQUENCES = {
     "user_01": [
@@ -51,18 +55,52 @@ EDIT_SEQUENCES = {
     ],
 }
 
+TIMEOUT = 30  # seconds per edit attempt
+
+
+def _run(gen_dir: Path, instruction: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [sys.executable, "src/edit.py", str(gen_dir), instruction],
+        capture_output=True,
+        text=True,
+        timeout=TIMEOUT,
+    )
+
 
 @pytest.mark.parametrize("user_id", EDIT_SEQUENCES.keys())
 def test_edit(user_id):
     gen_dir = Path("outputs/generations") / user_id
     instructions = EDIT_SEQUENCES[user_id]
+    total_start = time.monotonic()
+
+    log.info("[%s] Starting %d edits", user_id, len(instructions))
+
     for i, instruction in enumerate(instructions, start=1):
-        result = subprocess.run(
-            [sys.executable, "src/edit.py", str(gen_dir), instruction],
-            capture_output=True,
-            text=True,
-        )
-        assert result.returncode == 0, (
-            f"{user_id} edit '{instruction}' failed:\n{result.stderr}"
-        )
-        print(f"  [{user_id}] edit {i}/{len(instructions)} done: '{instruction}'")
+        log.info("[%s] edit %d/%d: \"%s\"", user_id, i, len(instructions), instruction)
+
+        try:
+            result = _run(gen_dir, instruction)
+        except subprocess.TimeoutExpired:
+            log.warning("[%s] edit %d timed out after %ds — retrying once", user_id, i, TIMEOUT)
+            try:
+                result = _run(gen_dir, instruction)
+            except subprocess.TimeoutExpired:
+                elapsed = time.monotonic() - total_start
+                pytest.fail(
+                    f"{user_id} edit {i} '{instruction}' timed out twice ({elapsed:.0f}s total)"
+                )
+
+        for line in result.stderr.splitlines():
+            if line.strip():
+                log.info(line)
+
+        if result.returncode != 0:
+            for line in result.stdout.splitlines():
+                if line.strip():
+                    log.info(line)
+            assert result.returncode == 0, (
+                f"{user_id} edit {i} '{instruction}' failed:\n{result.stderr}"
+            )
+
+    elapsed = time.monotonic() - total_start
+    log.info("[%s] All %d edits done [%.1fs]", user_id, len(instructions), elapsed)
