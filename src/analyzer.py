@@ -212,7 +212,6 @@ def _normalize_background(bg_value: str, parsed: ParsedInput) -> str:
     valid_names = {b.name for b in parsed.backgrounds}
     if bg_value in valid_names:
         return bg_value
-    # Try to convert filename → name
     candidate = bg_value.replace("_", " ").removesuffix(".jpg").removesuffix(".png")
     if candidate in valid_names:
         return candidate
@@ -226,6 +225,17 @@ def _normalize_background(bg_value: str, parsed: ParsedInput) -> str:
 def _parse(raw: str, parsed: ParsedInput) -> PosterState:
     data = json.loads(raw)
     analysis = _RawAnalysisResult(**data)
+
+    """
+    log.info("Model ranking (position → index, role):")
+    for img in sorted(analysis.selected_images, key=lambda x: x.position):
+        log.info("  pos=%d  idx=%d  role=%s", img.position, img.index, img.role)
+    if analysis.rejected_images:
+        log.info("Model rejections:")
+        for img in analysis.rejected_images:
+            log.info("  idx=%d  reason=%s", img.index, img.reason)
+    log.info("Model background choice: %s", analysis.background)
+    """
 
     if not analysis.selected_images:
         # Force-select the first image rather than producing an empty poster
@@ -283,6 +293,7 @@ def analyze(parsed: ParsedInput) -> PosterState:
     """Send all images to Claude, return initial PosterState."""
     client = anthropic.Anthropic()
     content = _build_content(parsed)
+    log.info("Sending %d images to Claude for analysis...", len(parsed.image_paths))
     raw = _call(client, content)
     try:
         return _parse(raw, parsed)
