@@ -1,3 +1,4 @@
+import functools
 import json
 import os
 from pathlib import Path
@@ -7,11 +8,11 @@ from layouts import LAYOUTS
 from cropper import prepare_photo
 from config import BACKGROUNDS_DIR, BACKGROUNDS_INDEX, LOGO_PATH
 
-def _load_bg_filenames() -> dict[str, str]:
+
+@functools.lru_cache(maxsize=1)
+def _bg_filenames() -> dict[str, str]:
     data = json.loads(BACKGROUNDS_INDEX.read_text(encoding="utf-8"))
     return {b["name"]: b["file"] for b in data["backgrounds"]}
-
-_BG_FILENAMES = _load_bg_filenames()
 
 _FONT_CANDIDATES = [
     "/System/Library/Fonts/Helvetica.ttc",                              # macOS
@@ -23,7 +24,7 @@ _FONT_CANDIDATES = [
 
 def render(state: PosterState) -> Image.Image:
     """Compose and return the poster as an RGB image."""
-    bg_filename = _BG_FILENAMES.get(state.background)
+    bg_filename = _bg_filenames().get(state.background)
     if bg_filename is None:
         raise ValueError(f"Unknown background '{state.background}' — not in index.json")
     bg_file = BACKGROUNDS_DIR / bg_filename
@@ -75,7 +76,7 @@ def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     return ImageFont.load_default()
 
 
-def _draw_text(base: Image.Image, name: str, anchor: dict, bg_w: int, bg_h: int) -> None:
+def _draw_text(base: Image.Image, name: str, anchor: dict[str, float], bg_w: int, bg_h: int) -> None:
     draw = ImageDraw.Draw(base)
     x = int(anchor["x"] * bg_w)
     y = int(anchor["y"] * bg_h)

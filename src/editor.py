@@ -1,5 +1,6 @@
 import json
 import logging
+from typing import Callable
 from pydantic import TypeAdapter
 from models import (
     PosterState, EditCommand,
@@ -8,7 +9,7 @@ from models import (
     SelectedImage, AvailableImage,
 )
 import anthropic
-from config import MODEL
+from config import MODEL, EDITOR_MAX_TOKENS, EDITOR_TEMPERATURE
 from llm_utils import LayoutName, LAYOUT_BY_COUNT, extract_json, response_text
 
 log = logging.getLogger(__name__)
@@ -80,8 +81,8 @@ def _interpret(state: PosterState, instruction: str, backgrounds_json: str,
     )
     resp = client.messages.create(
         model=MODEL,
-        max_tokens=512,
-        temperature=0,
+        max_tokens=EDITOR_MAX_TOKENS,
+        temperature=EDITOR_TEMPERATURE,
         system=SYSTEM,
         messages=[{"role": "user", "content": user_msg}],
     )
@@ -101,96 +102,107 @@ def _layout_for_count(count: int) -> LayoutName:
         return LAYOUT_BY_COUNT[count]
     except KeyError:
         raise ValueError(f"Unsupported image count for layout: {count}")
-    
 
-"""
-This method applies a structured edit command to state and raise ValueError for invalid operations
-1. If it is a swap, then find among the other available images. After swap, exchange roles as well.
-2. Removed images goes into the available image.
-3. During adjust layout, ff the new layout needs more images, it pulls images from available_images, inserts them 
-at the lowest position, and shifts existing selected images upward; if it needs fewer images, 
-it removes the lowest-position selected images and moves them back to available. 
-Afterward, it re-sorts selected images, reassigns positions starting from 1, and updates state.layout to the requested layout.
-4. During resize, make sure the photo never goes beyond the 0.7-1.3 expand factors range.
-"""
+
+def _apply_swap(state: PosterState, command: SwapImageCommand) -> PosterState:
+    old = next((img for img in state.selected_images
+                if img.position == command.target_position), None)
+    if old is None:
+        raise ValueError(f"No image at position {command.target_position}")
+
+    new_avail = next((img for img in state.available_images
+                      if img.index == command.new_image_index), None)
+    new_sel = next((img for img in state.selected_images
+                    if img.index == command.new_image_index), None)
+
+    if new_avail is not None:
+        state.selected_images.remove(old)
+        state.available_images.remove(new_avail)
+        state.selected_images.append(SelectedImage(
+            index=new_avail.index, filename=new_avail.filename,
+            role=old.role, position=old.position,
+        ))
+        state.available_images.append(AvailableImage(index=old.index, filename=old.filename))
+    elif new_sel is not None and new_sel is not old:
+        old.position, new_sel.position = new_sel.position, old.position
+        old.role,     new_sel.role     = new_sel.role,     old.role
+    elif new_sel is old:
+        pass
+    else:
+        raise ValueError(
+            f"Image index {command.new_image_index} not found in available or selected images"
+        )
+    state.selected_images.sort(key=lambda x: x.position)
+    return state
+
+
+def _apply_remove(state: PosterState, command: RemoveImageCommand) -> PosterState:
+    if len(state.selected_images) <= 1:
+        raise ValueError("Cannot remove the last image from the poster")
+    removed = next((img for img in state.selected_images
+                    if img.position == command.target_position), None)
+    if removed is None:
+        raise ValueError(f"No image at position {command.target_position}")
+    state.selected_images.remove(removed)
+    state.available_images.append(AvailableImage(index=removed.index, filename=removed.filename))
+    state.selected_images.sort(key=lambda x: x.position)
+    for i, img in enumerate(state.selected_images, start=1):
+        img.position = i
+    state.layout = _layout_for_count(len(state.selected_images))
+    return state
+
+
+def _apply_change_background(state: PosterState, command: ChangeBackgroundCommand) -> PosterState:
+    state.background = command.new_background
+    return state
+
+
+def _apply_adjust_layout(state: PosterState, command: AdjustLayoutCommand) -> PosterState:
+    new_count = int(command.new_layout.split("-")[0])
+    current_count = len(state.selected_images)
+    if new_count > current_count:
+        to_add = state.available_images[:new_count - current_count]
+        if len(to_add) < new_count - current_count:
+            raise ValueError("Not enough available images to expand layout")
+        for avail in to_add:
+            state.available_images.remove(avail)
+            for img in state.selected_images:
+                img.position += 1
+            state.selected_images.insert(0, SelectedImage(
+                index=avail.index, filename=avail.filename,
+                role="lifestyle", position=1,
+            ))
+    elif new_count < current_count:
+        state.selected_images.sort(key=lambda x: x.position)
+        to_remove = state.selected_images[:current_count - new_count]
+        for img in to_remove:
+            state.selected_images.remove(img)
+            state.available_images.append(AvailableImage(index=img.index, filename=img.filename))
+    state.selected_images.sort(key=lambda x: x.position)
+    for i, img in enumerate(state.selected_images, start=1):
+        img.position = i
+    state.layout = command.new_layout
+    return state
+
+
+def _apply_resize(state: PosterState, command: ResizePhotoCommand) -> PosterState:
+    new_scale = state.hero_scale * command.scale
+    state.hero_scale = max(0.7, min(1.3, new_scale))
+    return state
+
+
+_HANDLERS: dict[type, Callable[..., PosterState]] = {
+    SwapImageCommand: _apply_swap,
+    RemoveImageCommand: _apply_remove,
+    ChangeBackgroundCommand: _apply_change_background,
+    AdjustLayoutCommand: _apply_adjust_layout,
+    ResizePhotoCommand: _apply_resize,
+}
+
+
 def _apply(state: PosterState, command: EditCommand) -> PosterState:
     state = state.model_copy(deep=True)
-
-    if isinstance(command, SwapImageCommand):
-        old = next((img for img in state.selected_images
-                    if img.position == command.target_position), None)
-        if old is None:
-            raise ValueError(f"No image at position {command.target_position}")
-
-        new_avail = next((img for img in state.available_images
-                          if img.index == command.new_image_index), None)
-        new_sel = next((img for img in state.selected_images
-                        if img.index == command.new_image_index), None)
-
-        if new_avail is not None:
-            state.selected_images.remove(old)
-            state.available_images.remove(new_avail)
-            state.selected_images.append(SelectedImage(
-                index=new_avail.index, filename=new_avail.filename,
-                role=old.role, position=old.position,
-            ))
-            state.available_images.append(AvailableImage(index=old.index, filename=old.filename))
-        elif new_sel is not None and new_sel is not old:
-            old.position, new_sel.position = new_sel.position, old.position
-            old.role,     new_sel.role     = new_sel.role,     old.role
-        elif new_sel is old:
-            pass
-        else:
-            raise ValueError(
-                f"Image index {command.new_image_index} not found in available or selected images"
-            )
-        state.selected_images.sort(key=lambda x: x.position)
-
-    elif isinstance(command, RemoveImageCommand):
-        if len(state.selected_images) <= 1:
-            raise ValueError("Cannot remove the last image from the poster")
-        removed = next((img for img in state.selected_images
-                        if img.position == command.target_position), None)
-        if removed is None:
-            raise ValueError(f"No image at position {command.target_position}")
-        state.selected_images.remove(removed)
-        state.available_images.append(AvailableImage(index=removed.index, filename=removed.filename))
-        state.selected_images.sort(key=lambda x: x.position)
-        for i, img in enumerate(state.selected_images, start=1):
-            img.position = i
-        state.layout = _layout_for_count(len(state.selected_images))
-
-    elif isinstance(command, ChangeBackgroundCommand):
-        state.background = command.new_background
-
-    elif isinstance(command, AdjustLayoutCommand):
-        new_count = int(command.new_layout.split("-")[0])
-        current_count = len(state.selected_images)
-        if new_count > current_count:
-            to_add = state.available_images[:new_count - current_count]
-            if len(to_add) < new_count - current_count:
-                raise ValueError("Not enough available images to expand layout")
-            for avail in to_add:
-                state.available_images.remove(avail)
-                for img in state.selected_images:
-                    img.position += 1
-                state.selected_images.insert(0, SelectedImage(
-                    index=avail.index, filename=avail.filename,
-                    role="lifestyle", position=1,
-                ))
-        elif new_count < current_count:
-            state.selected_images.sort(key=lambda x: x.position)
-            to_remove = state.selected_images[:current_count - new_count]
-            for img in to_remove:
-                state.selected_images.remove(img)
-                state.available_images.append(AvailableImage(index=img.index, filename=img.filename))
-        state.selected_images.sort(key=lambda x: x.position)
-        for i, img in enumerate(state.selected_images, start=1):
-            img.position = i
-        state.layout = command.new_layout
-
-    elif isinstance(command, ResizePhotoCommand):
-        new_scale = state.hero_scale * command.scale
-        state.hero_scale = max(0.7, min(1.3, new_scale))
-
-    return state
+    handler = _HANDLERS.get(type(command))
+    if handler is None:
+        raise ValueError(f"Unsupported command type: {type(command)}")
+    return handler(state, command)

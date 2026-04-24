@@ -1,9 +1,27 @@
-"""
-This dictionary outlines the layout of each number of images
-I included 2 versions for each layout to support the change layout functionality
-"""
+from typing import TypedDict
 
-LAYOUTS: dict[str, dict] = {
+
+class SlotDef(TypedDict):
+    pos: int
+    cx: float
+    cy: float
+    w: float
+    h: float
+    angle: float
+    z: int
+
+
+class TextAnchor(TypedDict):
+    x: float
+    y: float
+
+
+class LayoutDef(TypedDict):
+    slots: list[SlotDef]
+    text_anchor: TextAnchor
+
+
+LAYOUTS: dict[str, LayoutDef] = {
     "1-image": {
         "slots": [
             {"pos": 1, "cx": 0.50, "cy": 0.62, "w": 0.72, "h": 0.60, "angle": -3, "z": 1},

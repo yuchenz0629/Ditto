@@ -14,7 +14,7 @@ from models import (
     AvailableImage,
 )
 import anthropic
-from config import MODEL, BACKGROUND_GUIDE_PATH, MAX_TOKENS, TEMPERATURE
+from config import MODEL, BACKGROUND_GUIDE_PATH, MAX_TOKENS, TEMPERATURE, GENDER_FALLBACK_BACKGROUND
 from llm_utils import LAYOUT_BY_COUNT, extract_json, response_text
 
 _MAX_SIDE = 800
@@ -185,7 +185,7 @@ def _normalize_background(bg_value: str, parsed: ParsedInput) -> str:
     )
     if candidate in valid_names:
         return candidate
-    fallback = "Forest Green" if parsed.gender == "female" else "Serene Blue"
+    fallback = GENDER_FALLBACK_BACKGROUND.get(parsed.gender, GENDER_FALLBACK_BACKGROUND["default"])
     log.warning("Unknown background %r — defaulting to '%s'", bg_value, fallback)
     return fallback
 

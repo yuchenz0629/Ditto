@@ -1,8 +1,10 @@
 import json
+import logging
 from pathlib import Path
 from models import ParsedInput, BackgroundMeta
 from config import BACKGROUNDS_INDEX
 
+log = logging.getLogger(__name__)
 IMAGE_SUFFIXES = {".jpeg", ".jpg", ".png"}
 
 def parse_metadata(user_dir: Path) -> ParsedInput:
@@ -12,6 +14,13 @@ def parse_metadata(user_dir: Path) -> ParsedInput:
     name = _extract_field(text, "name")
     gender = _extract_field(text, "gender").lower()
     ethnicity = _extract_field(text, "ethnicity")
+
+    if not name:
+        log.warning("Missing 'name' field in %s/metadata.md", user_dir)
+    if not gender:
+        log.warning("Missing 'gender' field in %s/metadata.md", user_dir)
+    if not ethnicity:
+        log.warning("Missing 'ethnicity' field in %s/metadata.md", user_dir)
 
     image_paths = sorted(
         str(p) for p in user_dir.iterdir()

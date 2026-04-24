@@ -20,18 +20,21 @@ Outputs are saved under `outputs` directory. Within it I have two sub-directorie
 │   └── users/              # One subdirectory contains images and profile information about a user
 ├── src/
 │   ├── config.py           # Centralized constants: model name, all asset and output paths
-│   ├── generate.py         # Entry point for generate a poster from scratch
+│   ├── llm_utils.py        # Shared LLM helpers: JSON extraction, response parsing, layout map
+│   ├── generate.py         # Entry point for generating a poster from scratch
 │   ├── edit.py             # Entry point for making edits to a poster via natural language
 │   ├── analyzer.py         # Claude vision: photo selection and background matching
 │   ├── editor.py           # Claude natural language edit command interpretation
 │   ├── renderer.py         # PIL-based poster compositor
-│   ├── layouts.py          # Layout definitions (1–4 image, v2 variants to satisfy support for layout toggles during editing)
-│   ├── cropper.py          # Smart photo cropping, in general I crop around the face to make the subject more noticeable
-│   ├── metadata_parser.py  # Parses user metadata.md files to extract the user's profile information
+│   ├── layouts.py          # Layout definitions (1–4 image, v2 variants for layout toggle support)
+│   ├── cropper.py          # Face-aware smart photo cropping
+│   ├── metadata_parser.py  # Parses user metadata.md to extract profile information
 │   └── models.py           # Pydantic data models: BackgroundMeta, PosterState, etc.
 ├── tests/
-│   ├── test_generate.py    # Test poster generation for all 10 users
-│   ├── test_edit.py        # Test poster editing, assuming generation has already been run
+│   ├── test_generate.py    # Integration test: poster generation for all 10 users
+│   ├── test_edit.py        # Integration test: poster editing (requires generation output)
+│   └── test_unit.py        # Unit tests: editor commands, JSON parsing, metadata extraction
+├── pyproject.toml          # Ruff and mypy configuration
 ├── pytest.ini              # Pytest config: live logging, verbose output per test
 ├── requirements.txt
 └── .env                    # API key (not committed)
