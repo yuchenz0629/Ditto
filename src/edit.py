@@ -42,8 +42,8 @@ def main() -> int:
         print(f"Error: {state_path} not found — run generate.py first", file=sys.stderr)
         return 1
 
-    state = PosterState.model_validate_json(state_path.read_text())
-    backgrounds_json = BACKGROUNDS_PATH.read_text()
+    state = PosterState.model_validate_json(state_path.read_text(encoding="utf-8"))
+    backgrounds_json = BACKGROUNDS_PATH.read_text(encoding="utf-8")
 
     print(f"Interpreting: \"{args.instruction}\"")
 
@@ -57,7 +57,7 @@ def main() -> int:
 
     poster = render(updated)
     poster.save(str(edit_dir / "poster.png"))
-    (edit_dir / "poster_state.json").write_text(updated.model_dump_json(indent=2))
+    (edit_dir / "poster_state.json").write_text(updated.model_dump_json(indent=2), encoding="utf-8")
 
     print(f"Updated → {edit_dir}/poster.png")
     return 0

@@ -205,7 +205,7 @@ def _build_content(parsed: ParsedInput) -> list:
             backgrounds_json=json.dumps(
                 [b.model_dump() for b in parsed.backgrounds], indent=2
             ),
-            background_guide=_BACKGROUND_GUIDE_PATH.read_text(),
+            background_guide=_BACKGROUND_GUIDE_PATH.read_text(encoding="utf-8"),
         ),
     })
     return content

@@ -56,7 +56,7 @@ def main() -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     poster.save(str(out_dir / "poster.png"))
-    (out_dir / "poster_state.json").write_text(state.model_dump_json(indent=2))
+    (out_dir / "poster_state.json").write_text(state.model_dump_json(indent=2), encoding="utf-8")
 
     print(f"[{user_dir.name}] Done → {out_dir}/poster.png [{t3 - t0:.1f}s total]")
     return 0

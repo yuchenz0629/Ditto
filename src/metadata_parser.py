@@ -19,7 +19,7 @@ def parse_metadata(user_dir: Path) -> ParsedInput:
         if p.suffix.lower() in IMAGE_SUFFIXES
     )
 
-    raw = json.loads((BACKGROUNDS_DIR / "index.json").read_text())
+    raw = json.loads((BACKGROUNDS_DIR / "index.json").read_text(encoding="utf-8"))
     backgrounds = [BackgroundMeta(**b) for b in raw["backgrounds"]]
 
     return ParsedInput(

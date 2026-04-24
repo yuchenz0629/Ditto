@@ -29,8 +29,9 @@ Outputs are saved under `outputs` directory. Within it I have two sub-directorie
 │   ├── metadata_parser.py  # Parses user metadata.md files to extract the user's profile information
 │   └── models.py           # Pydantic data models: BackgroundMeta, PosterState, etc.
 ├── tests/
-│   ├── test_edit.py        # Test poster generation
-│   ├── test_generate.py    # Test poster editing. I am going to assume the user runs this after generating posters
+│   ├── test_generate.py    # Test poster generation for all 10 users
+│   ├── test_edit.py        # Test poster editing, assuming generation has already been run
+├── pytest.ini              # Pytest config: live logging, verbose output per test
 ├── requirements.txt
 └── .env                    # API key (not committed)
 ```
@@ -42,6 +43,7 @@ Outputs are saved under `outputs` directory. Within it I have two sub-directorie
 
 - Python 3.11+
 - An Anthropic API Key stored in the `.env` file in the project root directory/
+- UTF-8 locale required. All JSON and Markdown files are read and written with explicit `encoding="utf-8"`. On Windows, ensure your system locale or Python environment is set to UTF-8 to avoid encoding errors.
 
 ### 2. Create and activate a virtual environment
 
@@ -92,12 +94,24 @@ pytest tests/test_edit.py
 
 ## Result Analysis
 
-1. Each oster generation typically costs around 6 - 15 seconds, which on average, meets the targeted duration. Overall, the posters generated looks good, the crops are reasonable and arrangement, after many attempts, turns out neat. The only imperfection is that for user_07, the fifth image of her wearing a ski helmet with goggles still has a big chance of being misidentified. But other than that, the results are able to match my expectation.
-2. I designed 25 editing tasks across all 10 users and the test is complete within 90 seconds, a pretty decent speed. 
+### Performance
+Each poster generation takes 6–15 seconds end-to-end. This includes everything from metadata parsing to Claude API call and render, meeting the target throughput. The 10-user test suite completes in roughly 2 or 2.5 minutes. The 25-edit suite across all users finishes in under 90 seconds, averaging around 3–4 seconds per edit.
+
+### Robustness
+I enforced in test suite a 30-second hard timeout per subprocess call. On timeout, it retries once before failing to handle transient API latency spikes without masking real failures, separating it with errors that fail immediately. Each test case gives structured live logs per user using pytest's `log_cli`. This way the tester sees timing,  selection details, and the LLM-interpreted action for every edit more clearly.
+
+### Consistency
+The analyzer runs at `temperature=0`, which minimises but does not eliminate LLM variance. The same set of images may yield different number of images or potentially background, and in this case, I believe it is acceptable, because this project is not a deterministic algorithm. The parse-failure retry fires only when Claude returns malformed JSON, not for selection variance. During testing, this path has never been observed, but it is a good-to-have precaution mechanism.
+
 
 
 ## Rooms for improvement and future insights
 
-1. Currently the image layouts are fixed. There are some limitations because the difference in the aspect ratio of the original photo means that some combinations are going to make better use of the canvas than others. A potential optimization would be add some kind of flexing to it. 
-2. Image recognition when it comes to subjects very far away and blurry ones could still be improved. 
-3. With the inclusion of some lightweight mobile architectures, I see the potential of shrinking each generation from just over 10 seconds to something drastically faster.
+### Fixed image layouts
+The current layouts use fixed slot dimensions, so very wide or very tall photos waste canvas space or crop heavily. Adding flexible slot sizing that adapts to the selected images' aspect ratios would make better use of the canvas across diverse photo sets.
+
+### Subject detection for distant and occluded subjects
+The face cropper uses OpenCV's Haar cascade, which is trained on frontal faces and performs not as well with accessories (an example that caused the most headache for me: ski helmets, goggles from the user_07 set), awkward angles, and small or distant subjects. Replacing it with a modern deep learning detector (MTCNN, RetinaFace, or MediaPipe Face Landmarker) would handle these edge cases significantly better.
+
+### Generation latency
+Currently, the Claude API call dominates generation time. To address it, I can use Anthropic's prompt caching — the system prompt, background guide, and background JSON are static across calls and qualify for caching, which could cut input token processing cost and latency by a lot. Or, make use of a lightweight on-device pre-filter like MobileNet to score and discard blatantly low-quality images before sending the full payload to Claude, reducing image count and payload size.
