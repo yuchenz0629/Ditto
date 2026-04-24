@@ -2,41 +2,23 @@ import base64
 import io
 import json
 import logging
-import re
 from pathlib import Path
 from typing import Literal
 from pydantic import BaseModel
 from PIL import Image as _PILImage
 from models import (
-    ParsedInput, 
+    ParsedInput,
     PosterState,
-    SelectedImage, 
-    RejectedImage, 
+    SelectedImage,
+    RejectedImage,
     AvailableImage,
 )
 import anthropic
-from anthropic.types import Message, TextBlock
 from config import MODEL, BACKGROUND_GUIDE_PATH, MAX_TOKENS, TEMPERATURE
+from llm_utils import LAYOUT_BY_COUNT, extract_json, response_text
 
 _MAX_SIDE = 800
 log = logging.getLogger(__name__)
-
-LayoutName = Literal[
-    "1-image", 
-    "2-image", 
-    "3-image", 
-    "4-image",
-    "2-image-v2", 
-    "3-image-v2", 
-    "4-image-v2",
-]
-
-_LAYOUT_BY_COUNT: dict[int, LayoutName] = {
-    1: "1-image",
-    2: "2-image",
-    3: "3-image",
-    4: "4-image",
-}
 
 # Raw model output models intentionally do not include filenames; filenames are
 # reattached after parsing by looking up the selected/rejected indices.
@@ -56,7 +38,6 @@ class _RawAnalysisResult(BaseModel):
     rejected_images: list[_RawRejectedImage]
     background: str
     layout: str
-
 
 
 SYSTEM = (
@@ -113,9 +94,9 @@ Filter by gender compatibility first (see gender field in each background). \
 Then use the detailed guide below to match by photo content, scene, and vibe — \
 paying close attention to the "When to Use" conditions for each background. \
 Use color_tone as a tiebreaker when conditions are inconclusive. \
-If no background is a clear match, pick the one \
-whose color_tone best complements the dominant_tone of the selected photos. \
-or fall back to the safest option discussed in the background_guide.
+Do not treat any background as a universal default — ignore any default or fallback \
+suggestions within the guide itself. If no background is a clear match, pick the one \
+whose color_tone best complements the dominant_tone of the selected photos.
 
 {background_guide}
 
@@ -132,7 +113,10 @@ layout must equal len(selected_images) formatted as "N-image" (e.g. "3-image").\
 # Claude expects images as base64 content blocks. Resize first to reduce payload
 # size while preserving enough visual detail for selection/cropping decisions.
 def _encode_image(path: str) -> dict:
-    img = _PILImage.open(path)
+    try:
+        img = _PILImage.open(path)
+    except Exception as e:
+        raise RuntimeError(f"Failed to open image {path}: {e}") from e
     if max(img.width, img.height) > _MAX_SIDE:
         img.thumbnail((_MAX_SIDE, _MAX_SIDE), _PILImage.Resampling.LANCZOS)
     buf = io.BytesIO()
@@ -150,26 +134,6 @@ def _encode_image(path: str) -> dict:
     }
 
 
-# This keeps parsing tolerant without weakening the downstream Pydantic validation
-def _extract_json(text: str) -> str:
-    fenced = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
-    if fenced:
-        return fenced.group(1).strip()
-    obj = re.search(r"\{[\s\S]*\}", text)
-    if obj:
-        return obj.group().strip()
-    return text.strip()
-
-
-def _response_text(resp: Message) -> str:
-    texts: list[str] = []
-
-    for block in resp.content:
-        if isinstance(block, TextBlock):
-            texts.append(block.text)
-
-    return "\n".join(texts)
-
 # All LLM interaction is isolated here so other tasks remain easy to test independently
 def _call(client: anthropic.Anthropic, content: list) -> str:
     resp = client.messages.create(
@@ -180,8 +144,8 @@ def _call(client: anthropic.Anthropic, content: list) -> str:
         messages=[{"role": "user", "content": content}],
     )
 
-    raw = _response_text(resp)
-    extracted = _extract_json(raw)
+    raw = response_text(resp)
+    extracted = extract_json(raw)
 
     if not extracted:
         log.warning("Model returned an empty or unparseable response: %r", raw[:200])
@@ -207,19 +171,18 @@ def _build_content(parsed: ParsedInput) -> list:
     })
     return content
 
-# Normalize common filename variants, then fall back to a safe default
-def _normalize_background(bg_value: str, parsed: ParsedInput) -> str:
-    """Return a background name that matches parsed.backgrounds[*].name.
 
-    The LLM sometimes returns the file field (e.g. 'Sunset_Glow.jpg') instead
-    of the name field (e.g. 'Sunset Glow').  Try exact match first, then
-    match by stripping extension and converting underscores to spaces.
-    Default to 'Sunset Glow' when no match is found.
-    """
+# Normalize common filename variants, then fall back to a gender-appropriate default
+def _normalize_background(bg_value: str, parsed: ParsedInput) -> str:
     valid_names = {b.name for b in parsed.backgrounds}
     if bg_value in valid_names:
         return bg_value
-    candidate = bg_value.replace("_", " ").removesuffix(".jpg").removesuffix(".png")
+    candidate = (
+        bg_value.replace("_", " ")
+        .removesuffix(".jpg")
+        .removesuffix(".jpeg")
+        .removesuffix(".png")
+    )
     if candidate in valid_names:
         return candidate
     fallback = "Forest Green" if parsed.gender == "female" else "Serene Blue"
@@ -233,7 +196,6 @@ def _parse(raw: str, parsed: ParsedInput) -> PosterState:
     data = json.loads(raw)
     analysis = _RawAnalysisResult(**data)
 
-    """
     log.info("Model ranking (position → index, role):")
     for img in sorted(analysis.selected_images, key=lambda x: x.position):
         log.info("  pos=%d  idx=%d  role=%s", img.position, img.index, img.role)
@@ -242,7 +204,6 @@ def _parse(raw: str, parsed: ParsedInput) -> PosterState:
         for img in analysis.rejected_images:
             log.info("  idx=%d  reason=%s", img.index, img.reason)
     log.info("Model background choice: %s", analysis.background)
-    """
 
     if not analysis.selected_images:
         # Force-select the first image rather than producing an empty poster
@@ -252,7 +213,14 @@ def _parse(raw: str, parsed: ParsedInput) -> PosterState:
         ]
         analysis.layout = "1-image"
 
-    all_indices = set(range(len(parsed.image_paths)))
+    n = len(parsed.image_paths)
+    for img in analysis.selected_images:
+        if img.index >= n:
+            raise ValueError(
+                f"LLM returned out-of-range index {img.index} (only {n} images)"
+            )
+
+    all_indices = set(range(n))
     selected_indices = {img.index for img in analysis.selected_images}
     rejected_indices = {img.index for img in analysis.rejected_images}
     available_indices = all_indices - selected_indices - rejected_indices
@@ -279,7 +247,7 @@ def _parse(raw: str, parsed: ParsedInput) -> PosterState:
         for i in sorted(available_indices)
     ]
 
-    derived_layout = _LAYOUT_BY_COUNT.get(len(selected))
+    derived_layout = LAYOUT_BY_COUNT.get(len(selected))
     if derived_layout is None:
         raise ValueError(f"Unsupported selected image count: {len(selected)}")
 
@@ -296,9 +264,8 @@ def _parse(raw: str, parsed: ParsedInput) -> PosterState:
     )
 
 
-def analyze(parsed: ParsedInput) -> PosterState:
+def analyze(parsed: ParsedInput, client: anthropic.Anthropic) -> PosterState:
     """Send all images to Claude, return initial PosterState."""
-    client = anthropic.Anthropic()
     content = _build_content(parsed)
     log.info("Sending %d images to Claude for analysis...", len(parsed.image_paths))
     raw = _call(client, content)

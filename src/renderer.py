@@ -1,33 +1,34 @@
+import json
 import os
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 from models import PosterState
 from layouts import LAYOUTS
 from cropper import prepare_photo
-from config import BACKGROUNDS_DIR, LOGO_PATH
+from config import BACKGROUNDS_DIR, BACKGROUNDS_INDEX, LOGO_PATH
 
-_BG_FILENAMES = {
-    "Serene Blue":      "Serene_Blue.jpg",
-    "Metallic Luxe":    "Metallic_Luxe.jpg",
-    "Night Owl":        "Night_Owl.jpg",
-    "Highway Dusk":     "Highway_Dusk.jpg",
-    "Forest Green":     "Forest_Green.jpg",
-    "Green Apple Fresh":"Green_Apple_Fresh.jpg",
-    "Sunset Glow":      "Sunset_Glow.jpg",
-    "Full Pink":        "Full_Pink.jpg",
-    "Dark Neon":        "Dark_Neon.jpg",
-}
+def _load_bg_filenames() -> dict[str, str]:
+    data = json.loads(BACKGROUNDS_INDEX.read_text(encoding="utf-8"))
+    return {b["name"]: b["file"] for b in data["backgrounds"]}
+
+_BG_FILENAMES = _load_bg_filenames()
 
 _FONT_CANDIDATES = [
-    "/System/Library/Fonts/Helvetica.ttc",          # macOS
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # Linux
-    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+    "/System/Library/Fonts/Helvetica.ttc",                              # macOS
+    "C:/Windows/Fonts/arial.ttf",                                       # Windows
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",                  # Linux
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",  # Linux
 ]
 
 
 def render(state: PosterState) -> Image.Image:
     """Compose and return the poster as an RGB image."""
-    bg_file = BACKGROUNDS_DIR / _BG_FILENAMES[state.background]
+    bg_filename = _BG_FILENAMES.get(state.background)
+    if bg_filename is None:
+        raise ValueError(f"Unknown background '{state.background}' — not in index.json")
+    bg_file = BACKGROUNDS_DIR / bg_filename
+    if not bg_file.exists():
+        raise FileNotFoundError(f"Background image not found: {bg_file}")
     base = Image.open(bg_file).convert("RGBA")
     bg_w, bg_h = base.size
 

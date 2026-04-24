@@ -3,6 +3,7 @@ import sys
 import logging
 import time
 from pathlib import Path
+import anthropic
 from metadata_parser import parse_metadata
 from analyzer import analyze
 from renderer import render
@@ -32,8 +33,9 @@ def main() -> int:
     t1 = time.monotonic()
     print(f"[{user_dir.name}] Found {len(parsed.image_paths)} photos [{t1 - t0:.1f}s]")
 
+    client = anthropic.Anthropic()
     print(f"[{user_dir.name}] Analyzing photos (Claude)...")
-    state = analyze(parsed)
+    state = analyze(parsed, client)
     t2 = time.monotonic()
 
     selected_summary = ", ".join(

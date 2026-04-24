@@ -1,4 +1,5 @@
 import cv2
+import functools
 import numpy as np
 from pathlib import Path
 from PIL import Image, ImageOps
@@ -16,16 +17,21 @@ def _get_haar_cascade_path() -> str:
         raise RuntimeError(
             "OpenCV haarcascade path is unavailable. Make sure opencv-python is installed."
         )
-
     return haarcascades + "haarcascade_frontalface_default.xml"
 
-_face_cascade = cv2.CascadeClassifier(_get_haar_cascade_path())
+
+@functools.lru_cache(maxsize=1)
+def _face_cascade() -> cv2.CascadeClassifier:
+    return cv2.CascadeClassifier(_get_haar_cascade_path())
 
 
 # Load image, smart-crop to a face-centered region, resize to fit within slot_w * slot_h 
 # Maintains the original aspect ratio, add white border, rotate, Returns RGBA PIL Image ready to paste onto the background
 def prepare_photo(image_path: Path, slot_w: int, slot_h: int, angle: float) -> Image.Image:
-    img = Image.open(image_path).convert("RGB")
+    try:
+        img = Image.open(image_path).convert("RGB")
+    except Exception as e:
+        raise RuntimeError(f"Failed to open image {image_path}: {e}") from e
     img = ImageOps.exif_transpose(img)
     img = _smart_crop(img, slot_w, slot_h)
     img = ImageOps.expand(img, border=BORDER_PX, fill="white")
@@ -85,7 +91,7 @@ Select the largest valid face, then the topmost face.
 """
 def _detect_face(img: Image.Image) -> tuple[int | None, int | None, int | None, int | None]:
     gray = cv2.cvtColor(np.array(img.convert("RGB")), cv2.COLOR_RGB2GRAY)
-    faces = _face_cascade.detectMultiScale(
+    faces = _face_cascade().detectMultiScale(
         gray, scaleFactor=1.05, minNeighbors=5, minSize=(30, 30)
     )
     if not len(faces):

@@ -1,7 +1,5 @@
 import json
 import logging
-import re
-from pathlib import Path
 from pydantic import TypeAdapter
 from models import (
     PosterState, EditCommand,
@@ -10,22 +8,8 @@ from models import (
     SelectedImage, AvailableImage,
 )
 import anthropic
-from anthropic.types import Message, TextBlock
-from typing import Literal
-
-LayoutName = Literal[
-    "1-image", "2-image", "3-image", "4-image",
-    "2-image-v2", "3-image-v2", "4-image-v2",
-]
-
-_LAYOUT_BY_COUNT: dict[int, LayoutName] = {
-    1: "1-image",
-    2: "2-image",
-    3: "3-image",
-    4: "4-image",
-}
-
 from config import MODEL
+from llm_utils import LayoutName, LAYOUT_BY_COUNT, extract_json, response_text
 
 log = logging.getLogger(__name__)
 _adapter = TypeAdapter(EditCommand)
@@ -80,36 +64,15 @@ Return exactly ONE of these JSON shapes:
 """
 
 
-def _extract_json(text: str) -> str:
-    fenced = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
-    if fenced:
-        return fenced.group(1).strip()
-    obj = re.search(r"\{[\s\S]*\}", text)
-    if obj:
-        return obj.group().strip()
-    return text.strip()
-
-
 def interpret_and_apply(state: PosterState, instruction: str,
-                        backgrounds_json: str) -> PosterState:
+                        backgrounds_json: str, client: anthropic.Anthropic) -> PosterState:
     """Parse NL instruction → edit command → updated state."""
-    command = _interpret(state, instruction, backgrounds_json)
+    command = _interpret(state, instruction, backgrounds_json, client)
     return _apply(state, command)
 
-def _response_text(resp: Message) -> str:
 
-    return "\n".join(
-
-        block.text
-
-        for block in resp.content
-
-        if isinstance(block, TextBlock)
-
-    )
-def _interpret(state: PosterState, instruction: str, backgrounds_json: str) -> EditCommand:
-    client = anthropic.Anthropic()
-
+def _interpret(state: PosterState, instruction: str, backgrounds_json: str,
+               client: anthropic.Anthropic) -> EditCommand:
     user_msg = USER_TEMPLATE.format(
         state_json=state.model_dump_json(indent=2),
         backgrounds_json=backgrounds_json,
@@ -122,8 +85,8 @@ def _interpret(state: PosterState, instruction: str, backgrounds_json: str) -> E
         system=SYSTEM,
         messages=[{"role": "user", "content": user_msg}],
     )
-    raw = _response_text(resp)
-    extracted = _extract_json(raw)
+    raw = response_text(resp)
+    extracted = extract_json(raw)
 
     if not extracted:
         log.warning("Editor LLM returned empty response: %r", raw[:200])
@@ -135,7 +98,7 @@ def _interpret(state: PosterState, instruction: str, backgrounds_json: str) -> E
 
 def _layout_for_count(count: int) -> LayoutName:
     try:
-        return _LAYOUT_BY_COUNT[count]
+        return LAYOUT_BY_COUNT[count]
     except KeyError:
         raise ValueError(f"Unsupported image count for layout: {count}")
     

@@ -2,6 +2,7 @@ import argparse
 import sys
 import logging
 from pathlib import Path
+import anthropic
 from models import PosterState
 from editor import interpret_and_apply
 from renderer import render
@@ -46,8 +47,9 @@ def main() -> int:
 
     print(f"Interpreting: \"{args.instruction}\"")
 
+    client = anthropic.Anthropic()
     try:
-        updated = interpret_and_apply(state, args.instruction, backgrounds_json)
+        updated = interpret_and_apply(state, args.instruction, backgrounds_json, client)
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
