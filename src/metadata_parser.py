@@ -1,8 +1,7 @@
 import json
 from pathlib import Path
 from models import ParsedInput, BackgroundMeta
-
-BACKGROUNDS_DIR = Path("assets/backgrounds")
+from config import BACKGROUNDS_INDEX
 
 IMAGE_SUFFIXES = {".jpeg", ".jpg", ".png"}
 
@@ -19,7 +18,7 @@ def parse_metadata(user_dir: Path) -> ParsedInput:
         if p.suffix.lower() in IMAGE_SUFFIXES
     )
 
-    raw = json.loads((BACKGROUNDS_DIR / "index.json").read_text(encoding="utf-8"))
+    raw = json.loads(BACKGROUNDS_INDEX.read_text(encoding="utf-8"))
     backgrounds = [BackgroundMeta(**b) for b in raw["backgrounds"]]
 
     return ParsedInput(

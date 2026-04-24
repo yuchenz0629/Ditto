@@ -16,10 +16,10 @@ from models import (
 )
 import anthropic
 from anthropic.types import Message, TextBlock
+from config import MODEL, BACKGROUND_GUIDE_PATH
 
 _MAX_SIDE = 800
 log = logging.getLogger(__name__)
-MODEL = "claude-sonnet-4-6"
 
 LayoutName = Literal[
     "1-image", 
@@ -189,9 +189,6 @@ def _call(client: anthropic.Anthropic, content: list) -> str:
     return extracted
 
 
-_BACKGROUND_GUIDE_PATH = Path("assets/backgrounds/Background_Guide.md")
-
-
 def _build_content(parsed: ParsedInput) -> list:
     content: list = []
     for i, path in enumerate(parsed.image_paths):
@@ -205,7 +202,7 @@ def _build_content(parsed: ParsedInput) -> list:
             backgrounds_json=json.dumps(
                 [b.model_dump() for b in parsed.backgrounds], indent=2
             ),
-            background_guide=_BACKGROUND_GUIDE_PATH.read_text(encoding="utf-8"),
+            background_guide=BACKGROUND_GUIDE_PATH.read_text(encoding="utf-8"),
         ),
     })
     return content

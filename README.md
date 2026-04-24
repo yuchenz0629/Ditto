@@ -19,6 +19,7 @@ Outputs are saved under `outputs` directory. Within it I have two sub-directorie
 │   ├── backgrounds/        # Existing background images + index.json + selection guide
 │   └── users/              # One subdirectory contains images and profile information about a user
 ├── src/
+│   ├── config.py           # Centralized constants: model name, all asset and output paths
 │   ├── generate.py         # Entry point for generate a poster from scratch
 │   ├── edit.py             # Entry point for making edits to a poster via natural language
 │   ├── analyzer.py         # Claude vision: photo selection and background matching

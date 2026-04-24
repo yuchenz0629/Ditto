@@ -4,9 +4,7 @@ from PIL import Image, ImageDraw, ImageFont
 from models import PosterState
 from layouts import LAYOUTS
 from cropper import prepare_photo
-
-BACKGROUNDS_DIR = Path("assets/backgrounds")
-LOGO_PATH = Path("assets/logo.png")
+from config import BACKGROUNDS_DIR, LOGO_PATH
 
 _BG_FILENAMES = {
     "Serene Blue":      "Serene_Blue.jpg",

@@ -25,8 +25,9 @@ _LAYOUT_BY_COUNT: dict[int, LayoutName] = {
     4: "4-image",
 }
 
+from config import MODEL
+
 log = logging.getLogger(__name__)
-MODEL = "claude-sonnet-4-6"
 _adapter = TypeAdapter(EditCommand)
 
 SYSTEM = """\

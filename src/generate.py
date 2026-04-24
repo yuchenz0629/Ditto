@@ -6,10 +6,9 @@ from pathlib import Path
 from metadata_parser import parse_metadata
 from analyzer import analyze
 from renderer import render
+from config import GENERATIONS_ROOT
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-
-GENERATIONS_ROOT = Path("outputs/generations")
 
 """
 All images are sent to Claude in a single API call, returns a JSON covering the entire image set

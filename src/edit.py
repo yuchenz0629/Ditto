@@ -5,10 +5,9 @@ from pathlib import Path
 from models import PosterState
 from editor import interpret_and_apply
 from renderer import render
+from config import EDITS_ROOT, BACKGROUNDS_INDEX
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-BACKGROUNDS_PATH = Path("assets/backgrounds/index.json")
-EDITS_ROOT = Path("outputs/edits")
 
 
 def next_edit_dir(output_dir: Path) -> Path:
@@ -43,7 +42,7 @@ def main() -> int:
         return 1
 
     state = PosterState.model_validate_json(state_path.read_text(encoding="utf-8"))
-    backgrounds_json = BACKGROUNDS_PATH.read_text(encoding="utf-8")
+    backgrounds_json = BACKGROUNDS_INDEX.read_text(encoding="utf-8")
 
     print(f"Interpreting: \"{args.instruction}\"")
 
