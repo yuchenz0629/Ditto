@@ -56,7 +56,10 @@ Available backgrounds:
 For each photo (zero-indexed) assess: subject (single/group/none), \
 framing (close-up/upper-body/full-body/wide), face_clarity (clear/partial/none), \
 technical_quality (good/acceptable/poor), scene (e.g. beach, gym, bar, outdoors), \
-dominant_tone (warm/cool/neutral/dark).
+dominant_tone (warm/cool/neutral/dark), \
+subject_prominence (dominant/medium/small/minimal — how much of the frame the \
+subject fills and how visually central they are; penalise subjects partially hidden \
+behind foreground objects or dwarfed by a large background).
 
 ## Step 2 — De-duplication
 If two images share the same scene, outfit, framing, and add no new visual information, \
@@ -77,12 +80,18 @@ Rules:
 - Only add an image to rejected_images if it is truly unusable: no person visible
   (empty landscape, object-only shot), extreme blur making subject unrecognisable,
   or so dark the subject cannot be seen.
-- Do NOT select images where the subject is very small (appears to occupy less than
-  ~15 percent of the frame height) AND the shot is also blurry, or the subject is at the
-  bottom of the frame — leave such images as available for manual swap instead.
-  This typically covers: far-away crowd shots where the subject is barely visible,
-  gym-mirror shots where the subject's reflection is at the bottom, or any photo
-  where technical quality is poor AND the subject is distant.
+- Do NOT select images where the subject is too distant or too obscured to look good
+  at poster scale — leave them as available for manual swap instead. Any one of the
+  following is sufficient to disqualify from selection (sharpness does not override this):
+    • subject_prominence rated small or minimal in Step 1
+    • subject appears to occupy less than ~25% of the frame height
+    • a foreground object (equipment rack, car, crowd, furniture) substantially
+      blocks the view of the subject's body
+    • subject is a small figure against a large or dominant background (wide cityscape,
+      open landscape, stadium) and facial features are not clearly legible at a glance
+    • mirror/reflection shots where the subject's image is distant, back-facing,
+      or partially hidden behind objects in the foreground
+  These images crop and scale poorly at poster dimensions regardless of sharpness.
 - Strongly prefer images with people.
 - When two images show the same person, prefer the one with higher apparent resolution
   and sharpness (i.e., avoid selecting a blurry or low-resolution version if a

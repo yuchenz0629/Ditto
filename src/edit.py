@@ -11,9 +11,9 @@ from config import EDITS_ROOT, BACKGROUNDS_INDEX
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
 
-def next_edit_dir(output_dir: Path) -> Path:
-    user_name = output_dir.name
-    user_edits_dir = EDITS_ROOT / user_name
+def next_edit_dir(state: PosterState) -> Path:
+    # Use state.user so this works whether the input dir is a generation dir or a prior edit dir.
+    user_edits_dir = EDITS_ROOT / state.user
     user_edits_dir.mkdir(parents=True, exist_ok=True)
 
     existing_edit_nums = []
@@ -54,7 +54,7 @@ def main() -> int:
         print(f"Error: {e}", file=sys.stderr)
         return 1
 
-    edit_dir = next_edit_dir(args.output_dir)
+    edit_dir = next_edit_dir(updated)
 
     poster = render(updated)
     poster.save(str(edit_dir / "poster.png"))
